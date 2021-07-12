@@ -10,7 +10,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.TM">
         <activity
-            android:name=".FullscreenActivity"
+            android:name=".TmActivity"
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:label="@string/app_name"
             android:theme="@style/Theme.TM.Fullscreen">
