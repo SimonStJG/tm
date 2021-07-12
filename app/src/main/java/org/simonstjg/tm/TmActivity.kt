@@ -1,6 +1,7 @@
 package org.simonstjg.tm
 
 import android.annotation.SuppressLint
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.media.AudioAttributes
@@ -39,15 +40,16 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
 
     private var pulses: MutableList<Pulse> = mutableListOf()
 
+    // TODO Who needs encapsulation anywayz
+    private var initialPulseSize: Float = 0f
+
     private var drawRunnable = Runnable {
         while (!requestThreadStop) {
             if (mainSurface.holder != null) {
                 val canvas = mainSurface.holder.lockCanvas()
 
                 try {
-                    canvas.drawColor(Color.BLACK)
-
-                    canvas.drawText(getString(R.string.background_text), canvas.width/2f, canvas.height/2f, backgroundTextPaint)
+                    drawBackground(canvas)
 
                     // TODO Could be more performant, e.g. because we could always push onto the end of
                     // the queue and pop off the other end.  But that's a premature optimisation
@@ -65,15 +67,23 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
         }
     }
 
+    private fun drawBackground(canvas: Canvas) {
+        canvas.drawColor(Color.BLACK)
+
+        canvas.drawText(
+            getString(R.string.background_text),
+            canvas.width / 2f,
+            canvas.height / 2f,
+            backgroundTextPaint
+        )
+    }
+
     private val playSoundListener = View.OnTouchListener { view, motionEvent ->
         when (motionEvent.action) {
             MotionEvent.ACTION_DOWN -> {
                 if (soundReady) {
-                    // TODO Precalculate initial size
-                    val m = min(view.height, view.width)
-
                     synchronized(this) {
-                        pulses.add(Pulse.randomPulse(motionEvent.x, motionEvent.y, PULSE_RATIO * m))
+                        pulses.add(Pulse.randomPulse(motionEvent.x, motionEvent.y, initialPulseSize))
                     }
 
                     val rate = (1.5f-(motionEvent.y / view.height))
@@ -124,8 +134,6 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
         backgroundTextPaint = Paint().apply {
             color = Color.WHITE
             textAlign = Paint.Align.CENTER
-            // TODO Calculate from screen size
-            textSize = 200f
         }
     }
 
@@ -153,6 +161,25 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         Log.i(TAG, "surfaceChanged")
+        val canvas = holder.lockCanvas()
+        try {
+            precalculateUsefulConstants(canvas)
+            drawBackground(canvas)
+        } finally {
+            holder.unlockCanvasAndPost(canvas)
+        }
+    }
+
+    private fun precalculateUsefulConstants(canvas: Canvas) {
+        initialPulseSize = min(canvas.width, canvas.height) * PULSE_RATIO
+
+        // Set the font size to something in the right ballpark, then scale it until it's correct.
+        // I want
+        //      textWidth / canvasWidth = .8
+        val textSizeGuess = 300f
+        backgroundTextPaint.textSize = textSizeGuess
+        val actualSizeOfGuess = backgroundTextPaint.measureText(getString(R.string.background_text))
+        backgroundTextPaint.textSize = (textSizeGuess / actualSizeOfGuess) * .8f * canvas.width
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
