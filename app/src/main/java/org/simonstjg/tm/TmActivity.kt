@@ -1,24 +1,17 @@
 package org.simonstjg.tm
 
 import android.annotation.SuppressLint
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
 import android.media.AudioAttributes
 import android.media.SoundPool
 import android.os.Bundle
 import android.os.StrictMode
 import android.util.Log
-import android.view.MotionEvent
-import android.view.SurfaceHolder
-import android.view.SurfaceView
-import android.view.View
+import android.view.*
 import androidx.appcompat.app.AppCompatActivity
 import org.simonstjg.tm.databinding.ActivityTmBinding
-import kotlin.math.min
 import kotlin.properties.Delegates
 
-class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoadCompleteListener {
+class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoadCompleteListener, Choreographer.FrameCallback {
     init {
         if (BuildConfig.DEBUG) {
             StrictMode.enableDefaults();
@@ -28,64 +21,16 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
     private lateinit var binding: ActivityTmBinding
     private lateinit var mainSurface: SurfaceView
     private lateinit var soundPool: SoundPool
-    private lateinit var drawThread: Thread
+    private lateinit var renderThread: RenderThread
 
-    // TODO Don't need lateinit here?
-    private lateinit var paint: Paint
-    private lateinit var backgroundTextPaint: Paint
-
-    private var requestThreadStop: Boolean = false
     private var soundId by Delegates.notNull<Int>()
     private var soundReady: Boolean = false
-
-    private var pulses: MutableList<Pulse> = mutableListOf()
-
-    // TODO Who needs encapsulation anywayz
-    private var initialPulseSize: Float = 0f
-
-    private var drawRunnable = Runnable {
-        while (!requestThreadStop) {
-            if (mainSurface.holder != null) {
-                val canvas = mainSurface.holder.lockCanvas()
-
-                try {
-                    drawBackground(canvas)
-
-                    // TODO Could be more performant, e.g. because we could always push onto the end of
-                    // the queue and pop off the other end.  But that's a premature optimisation
-                    // right now.  Also, this lock could be held for ages if I have a lot of ticks
-                    synchronized(this) {
-                        pulses.removeIf { pulse ->
-                            !pulse.tick(canvas, paint)
-                        }
-                    }
-                } finally {
-                    mainSurface.holder.unlockCanvasAndPost(canvas)
-                }
-            }
-            Thread.sleep(TICK_SPEED)
-        }
-    }
-
-    private fun drawBackground(canvas: Canvas) {
-        canvas.drawColor(Color.BLACK)
-
-        canvas.drawText(
-            getString(R.string.background_text),
-            canvas.width / 2f,
-            canvas.height / 2f,
-            backgroundTextPaint
-        )
-    }
 
     private val playSoundListener = View.OnTouchListener { view, motionEvent ->
         when (motionEvent.action) {
             MotionEvent.ACTION_DOWN -> {
                 if (soundReady) {
-                    synchronized(this) {
-                        pulses.add(Pulse.randomPulse(motionEvent.x, motionEvent.y, initialPulseSize))
-                    }
-
+                    renderThread.handler.addPulse(motionEvent.x, motionEvent.y)
                     val rate = (1.5f-(motionEvent.y / view.height))
                     if (soundPool.play(soundId, 1f, 1f, 1, 0, rate) == 0) {
                         Log.e(TAG, "soundPool play failed")
@@ -128,13 +73,6 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
         soundId = soundPool.load(this.applicationContext, R.raw.s1, 1)
         soundPool.setOnLoadCompleteListener(this)
 
-        paint = Paint().apply {
-            color = Color.BLUE
-        }
-        backgroundTextPaint = Paint().apply {
-            color = Color.WHITE
-            textAlign = Paint.Align.CENTER
-        }
     }
 
     @SuppressLint("InlinedApi")
@@ -153,38 +91,24 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
 
     override fun surfaceCreated(holder: SurfaceHolder) {
         Log.i(TAG, "surfaceCreated")
-        requestThreadStop = false
-        drawThread = Thread(drawRunnable).apply {
-            start()
-        }
+
+        renderThread = RenderThread(mainSurface.holder)
+        renderThread.start()
+        // Doesn't take long, fine to block the UI thread
+        renderThread.waitUntilReady()
+        Choreographer.getInstance().postFrameCallback(this)
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         Log.i(TAG, "surfaceChanged")
-        val canvas = holder.lockCanvas()
-        try {
-            precalculateUsefulConstants(canvas)
-            drawBackground(canvas)
-        } finally {
-            holder.unlockCanvasAndPost(canvas)
-        }
-    }
-
-    private fun precalculateUsefulConstants(canvas: Canvas) {
-        initialPulseSize = min(canvas.width, canvas.height) * PULSE_RATIO
-
-        // Set the font size to something in the right ballpark, then scale it until it's correct.
-        // I want
-        //      textWidth / canvasWidth = .8
-        val textSizeGuess = 300f
-        backgroundTextPaint.textSize = textSizeGuess
-        val actualSizeOfGuess = backgroundTextPaint.measureText(getString(R.string.background_text))
-        backgroundTextPaint.textSize = (textSizeGuess / actualSizeOfGuess) * .8f * canvas.width
+        renderThread.handler.surfaceChanged(width, height)
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         Log.i(TAG, "surfaceDestroyed")
-        requestThreadStop = true
+        Choreographer.getInstance().removeFrameCallback(this)
+        renderThread.handler.shutdown()
+        renderThread.join()
     }
 
     override fun onLoadComplete(soundPool: SoundPool?, sampleId: Int, status: Int) {
@@ -194,11 +118,12 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
         soundReady = true
     }
 
+    override fun doFrame(frameTimeNanos: Long) {
+        renderThread.handler.doFrame(frameTimeNanos)
+        Choreographer.getInstance().postFrameCallback(this)
+    }
+
     companion object {
         private val TAG: String = TmActivity::class.java.name
-        private const val PULSE_RATIO: Float = 0.1f
-        // TODO Surely this isn't the best thing to do, should I use some sort of timer, or draw
-        // as fast as possible?
-        private const val TICK_SPEED: Long = 100
     }
 }
