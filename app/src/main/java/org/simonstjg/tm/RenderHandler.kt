@@ -5,11 +5,11 @@ import android.os.Looper
 import android.os.Message
 import java.lang.ref.WeakReference
 
-class RenderHandler(looper: Looper, renderThread: RenderThread): Handler(looper) {
+class RenderHandler(looper: Looper, renderThread: RenderThread) : Handler(looper) {
     private val renderThread = WeakReference(renderThread)
 
     override fun handleMessage(msg: Message) {
-        when(msg.what) {
+        when (msg.what) {
             SHUTDOWN -> {
                 if (!hasMessages(SHUTDOWN)) {
                     Looper.myLooper()!!.quit()
@@ -33,7 +33,9 @@ class RenderHandler(looper: Looper, renderThread: RenderThread): Handler(looper)
     }
 
     fun shutdown() = sendMessage(obtainMessage(SHUTDOWN))
-    fun surfaceChanged(width: Int, height: Int) = sendMessage(obtainMessage(SURFACE_CHANGED, width, height))
+    fun surfaceChanged(width: Int, height: Int) =
+        sendMessage(obtainMessage(SURFACE_CHANGED, width, height))
+
     fun doFrame(frameTimeNanos: Long) = sendMessage(obtainMessage(DO_FRAME, frameTimeNanos))
     fun addPulse(x: Float, y: Float) = sendMessage(obtainMessage(ADD_PULSE, x.toInt(), y.toInt()))
 

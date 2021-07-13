@@ -7,16 +7,19 @@ import android.util.Log
 import android.view.SurfaceHolder
 import kotlin.math.min
 
-class RenderThread(private val surfaceHolder: SurfaceHolder): Thread() {
-    private var initialPulseSize: Double = 0.0
+
+class RenderThread(
+    private val surfaceHolder: SurfaceHolder,
+    private val backgroundString: String
+) : Thread() {
     lateinit var handler: RenderHandler
 
     private val startLock = Object()
     private var ready: Boolean = false
-    private var lastFrameTimeNanos: Long? = null
 
+    private var initialPulseSize: Double = 0.0
     private var pulses: MutableList<Pulse> = mutableListOf()
-
+    private var lastFrameTimeNanos: Long? = null
     private var paint = Paint().apply {
         color = Color.BLUE
     }
@@ -29,7 +32,7 @@ class RenderThread(private val surfaceHolder: SurfaceHolder): Thread() {
         Log.i(TAG, "run")
         Looper.prepare()
         handler = RenderHandler(Looper.myLooper()!!, this)
-        synchronized (startLock) {
+        synchronized(startLock) {
             ready = true;
             startLock.notify();    // signal waitUntilReady()
         }
@@ -37,11 +40,8 @@ class RenderThread(private val surfaceHolder: SurfaceHolder): Thread() {
     }
 
     /**
-     * Waits until the render thread is ready to receive messages.
-     *
-     * Call from the UI thread.
-     *
-     * TODO This is pretty "old school java" - surely there's a newer Android-y way?
+     * Waits until the render thread is ready to receive messages.  Supposed to be called from the
+     * UI thread which needs to post a message almost immediately after the render thread starts.
      */
     fun waitUntilReady() {
         synchronized(startLock) {
@@ -56,31 +56,36 @@ class RenderThread(private val surfaceHolder: SurfaceHolder): Thread() {
         precalculateUsefulConstants(width, height)
     }
 
+    /**
+     * Calculate useful constants which will be needed often, e.g. when we draw a frame or create a
+     * pulse.
+     */
     private fun precalculateUsefulConstants(width: Int, height: Int) {
         Log.i(TAG, "precalculateUsefulConstants")
         initialPulseSize = (min(width, height) * PULSE_RATIO).toDouble()
 
         // Set the font size to something in the right ballpark, then scale it until it's correct.
-        // I want
-        //      textWidth / canvasWidth = .8
+        // We want to end up with `textWidth / canvasWidth = .8`.
         val textSizeGuess = 300f
         backgroundTextPaint.textSize = textSizeGuess
-        // TODO Extract string resource
-        val actualSizeOfGuess = backgroundTextPaint.measureText("TOUCH ME")
+        val actualSizeOfGuess = backgroundTextPaint.measureText(backgroundString)
         backgroundTextPaint.textSize = (textSizeGuess / actualSizeOfGuess) * .8f * width
     }
 
+    /**
+     * Called to render each frame.  Try not to do anything even slightly heavy here, this will be
+     * running every 16ms or so.
+     */
     fun doFrame(frameTimeNanos: Long) {
-        val lastFrameDuration = lastFrameTimeNanos?.let {frameTimeNanos - it}
+        val lastFrameDuration = lastFrameTimeNanos?.let { frameTimeNanos - it }
         lastFrameTimeNanos = frameTimeNanos
 
         val canvas = surfaceHolder.lockCanvas()
 
         try {
             canvas.drawColor(Color.BLACK)
-
             canvas.drawText(
-                "TOUCH ME",
+                backgroundString,
                 canvas.width / 2f,
                 canvas.height / 2f,
                 backgroundTextPaint
@@ -88,8 +93,8 @@ class RenderThread(private val surfaceHolder: SurfaceHolder): Thread() {
 
             if (lastFrameDuration != null) {
                 // Could be more performant, e.g. because we could always push onto the end of
-                // the queue and pop off the other end.  But that's a premature optimisation
-                // right now.  Also, this lock could be held for ages if I have a lot of ticks?
+                // the queue and pop off the other end?  OTOH we remove relatively rarely so maybe
+                // that's a premature optimisation.
                 synchronized(this) {
                     pulses.removeIf { pulse ->
                         !pulse.tick(canvas, paint, lastFrameDuration)
@@ -108,6 +113,9 @@ class RenderThread(private val surfaceHolder: SurfaceHolder): Thread() {
     }
 
     companion object {
+        /**
+         * The size of the pulse as a ratio of the min(width, height) of the canvas.
+         */
         private const val PULSE_RATIO: Float = 0.1f
         private val TAG = RenderThread::class.java.name
     }

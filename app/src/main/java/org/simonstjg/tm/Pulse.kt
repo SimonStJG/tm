@@ -2,8 +2,6 @@ package org.simonstjg.tm
 
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.util.Log
-import kotlin.math.pow
 import kotlin.random.Random
 
 sealed class Pulse(protected val x: Float, protected val y: Float, protected val initialPulseSize: Double) {

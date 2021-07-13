@@ -11,7 +11,9 @@ import androidx.appcompat.app.AppCompatActivity
 import org.simonstjg.tm.databinding.ActivityTmBinding
 import kotlin.properties.Delegates
 
-class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoadCompleteListener, Choreographer.FrameCallback {
+class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoadCompleteListener,
+    Choreographer.FrameCallback {
+
     init {
         if (BuildConfig.DEBUG) {
             StrictMode.enableDefaults();
@@ -31,7 +33,7 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
             MotionEvent.ACTION_DOWN -> {
                 if (soundReady) {
                     renderThread.handler.addPulse(motionEvent.x, motionEvent.y)
-                    val rate = (1.5f-(motionEvent.y / view.height))
+                    val rate = (1.5f - (motionEvent.y / view.height))
                     if (soundPool.play(soundId, 1f, 1f, 1, 0, rate) == 0) {
                         Log.e(TAG, "soundPool play failed")
                     }
@@ -63,7 +65,7 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
         hideSystemUi()
 
         soundPool = SoundPool.Builder()
-            .setMaxStreams(5)
+            .setMaxStreams(MAX_CONCURRENT_SOUNDS)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_GAME)
@@ -72,10 +74,8 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
             .build()
         soundId = soundPool.load(this.applicationContext, R.raw.s1, 1)
         soundPool.setOnLoadCompleteListener(this)
-
     }
 
-    @SuppressLint("InlinedApi")
     private fun hideSystemUi() {
         Log.i(TAG, "hideSystemUi")
         supportActionBar?.hide()
@@ -92,7 +92,7 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
     override fun surfaceCreated(holder: SurfaceHolder) {
         Log.i(TAG, "surfaceCreated")
 
-        renderThread = RenderThread(mainSurface.holder)
+        renderThread = RenderThread(mainSurface.holder, getString(R.string.background_text))
         renderThread.start()
         // Doesn't take long, fine to block the UI thread
         renderThread.waitUntilReady()
@@ -111,6 +111,11 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
         renderThread.join()
     }
 
+    override fun doFrame(frameTimeNanos: Long) {
+        renderThread.handler.doFrame(frameTimeNanos)
+        Choreographer.getInstance().postFrameCallback(this)
+    }
+
     override fun onLoadComplete(soundPool: SoundPool?, sampleId: Int, status: Int) {
         Log.i(TAG, "onLoadComplete")
         assert(status == 0)
@@ -118,12 +123,8 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
         soundReady = true
     }
 
-    override fun doFrame(frameTimeNanos: Long) {
-        renderThread.handler.doFrame(frameTimeNanos)
-        Choreographer.getInstance().postFrameCallback(this)
-    }
-
     companion object {
         private val TAG: String = TmActivity::class.java.name
+        private const val MAX_CONCURRENT_SOUNDS = 8
     }
 }
