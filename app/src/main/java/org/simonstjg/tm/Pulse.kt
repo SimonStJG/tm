@@ -6,31 +6,30 @@ import android.util.Log
 import kotlin.math.pow
 import kotlin.random.Random
 
-sealed class Pulse(protected var x: Float, protected var y: Float, protected var size: Double) {
+sealed class Pulse(protected val x: Float, protected val y: Float, protected val initialPulseSize: Double) {
+    protected var size: Double = initialPulseSize
+
+    /**
+     * I want the time to shrink from initialPulseSize to 0 to be TIME_TO_SHRINK_SECS, and we're
+     * going to shrink linearly.  The unit of this is pixels per nanosecond.
+     */
+    private val shrinkSpeed: Double = initialPulseSize / (1_000_000_000.0 * TIME_TO_SHRINK_SECS)
+
     fun tick(canvas: Canvas, paint: Paint, frameDuration: Long): Boolean {
         draw(canvas, paint)
-
-        if(frameDuration >= 1006666985) {
-            // A silly hack because this is an eulator
-            return true
-        }
-        val shrinkage = PULSE_SHRINKING_SPEED.pow((frameDuration / 100_000_000).toDouble())
-        val newSize = (size * shrinkage)
-        Log.i("Pulse", "$frameDuration $size $newSize $shrinkage")
-        size = newSize
-        return size >= MIN_SIZE
+        size -= shrinkSpeed * frameDuration
+        return size >= 0
     }
 
     protected abstract fun draw(canvas: Canvas, paint: Paint)
 
     companion object {
-        const val PULSE_SHRINKING_SPEED = .8
-        const val MIN_SIZE: Float = 1f
+        private const val TIME_TO_SHRINK_SECS = 3
 
-        fun randomPulse(x: Float, y: Float, size: Double): Pulse =
+        fun randomPulse(x: Float, y: Float, initialPulseSize: Double): Pulse =
             when (Random.nextInt(0, 2)) {
-                0 -> SolidPulse(x, y, size)
-                1 -> RadialPulse(x, y, size)
+                0 -> SolidPulse(x, y, initialPulseSize)
+                1 -> RadialPulse(x, y, initialPulseSize)
                 else -> throw IllegalArgumentException()
             }
     }
