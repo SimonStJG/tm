@@ -26,7 +26,7 @@ class RenderHandler(looper: Looper, renderThread: RenderThread) : Handler(looper
                 renderThread.get()!!.doFrame(msg.obj as Long)
             }
             ADD_PULSE -> {
-                renderThread.get()!!.addPulse(msg.arg1, msg.arg2)
+                renderThread.get()!!.addPulse(msg.obj as PulseRenderer)
             }
         }
     }
@@ -36,7 +36,7 @@ class RenderHandler(looper: Looper, renderThread: RenderThread) : Handler(looper
         sendMessage(obtainMessage(SURFACE_CHANGED, width, height))
 
     fun doFrame(frameTimeNanos: Long) = sendMessage(obtainMessage(DO_FRAME, frameTimeNanos))
-    fun addPulse(x: Float, y: Float) = sendMessage(obtainMessage(ADD_PULSE, x.toInt(), y.toInt()))
+    fun addPulse(pulse: PulseRenderer) = sendMessage(obtainMessage(ADD_PULSE, pulse))
 
     companion object {
         private const val SHUTDOWN = 0

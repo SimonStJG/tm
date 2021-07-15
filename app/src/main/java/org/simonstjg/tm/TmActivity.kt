@@ -9,14 +9,13 @@ import android.util.Log
 import android.view.*
 import androidx.appcompat.app.AppCompatActivity
 import org.simonstjg.tm.databinding.ActivityTmBinding
-import kotlin.properties.Delegates
 
-class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoadCompleteListener,
+class TmActivity : AppCompatActivity(), SurfaceHolder.Callback,
     Choreographer.FrameCallback {
 
     init {
         if (BuildConfig.DEBUG) {
-            StrictMode.enableDefaults();
+            StrictMode.enableDefaults()
         }
     }
 
@@ -24,23 +23,23 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
     private lateinit var mainSurface: SurfaceView
     private lateinit var soundPool: SoundPool
     private lateinit var renderThread: RenderThread
-    private lateinit var pulseFactory: Pulse.Factory
+    private lateinit var pulses: Pulses
 
-    private var soundId by Delegates.notNull<Int>()
-    private var soundReady: Boolean = false
-
-    private val playSoundListener = View.OnTouchListener { view, motionEvent ->
+    private val onTouch = View.OnTouchListener { view, motionEvent ->
         when (motionEvent.action) {
             MotionEvent.ACTION_DOWN -> {
-                if (soundReady) {
-                    renderThread.handler.addPulse(motionEvent.x, motionEvent.y)
-                    val rate = (1.5f - (motionEvent.y / view.height))
-                    if (soundPool.play(soundId, 1f, 1f, 1, 0, rate) == 0) {
-                        Log.e(TAG, "soundPool play failed")
-                    }
-                } else {
-                    Log.e(TAG, "Sound not ready")
-                }
+                val pulse = pulses.random()
+                renderThread.handler.addPulse(
+                    pulse.renderer(
+                        PulseRenderer.StartingPosition(
+                            motionEvent.x,
+                            motionEvent.y
+                        )
+                    )
+                )
+
+                val rate = (1.5f - (motionEvent.y / view.height))
+                pulse.playSound(soundPool, rate)
             }
             MotionEvent.ACTION_UP -> view.performClick()
             else -> {
@@ -60,7 +59,7 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         mainSurface = binding.mainSurface
-        mainSurface.setOnTouchListener(playSoundListener)
+        mainSurface.setOnTouchListener(onTouch)
         mainSurface.holder.addCallback(this)
 
         hideSystemUi()
@@ -73,10 +72,8 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
                     .build()
             )
             .build()
-        soundId = soundPool.load(this.applicationContext, R.raw.s1, 1)
-        soundPool.setOnLoadCompleteListener(this)
 
-        pulseFactory = Pulse.Factory(applicationContext)
+        pulses = Pulses(applicationContext, soundPool)
     }
 
     private fun hideSystemUi() {
@@ -95,7 +92,7 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
     override fun surfaceCreated(holder: SurfaceHolder) {
         Log.i(TAG, "surfaceCreated")
 
-        renderThread = RenderThread(mainSurface.holder, getString(R.string.background_text), pulseFactory)
+        renderThread = RenderThread(mainSurface.holder, getString(R.string.background_text))
         renderThread.start()
         // Doesn't take long, fine to block the UI thread
         renderThread.waitUntilReady()
@@ -117,13 +114,6 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
     override fun doFrame(frameTimeNanos: Long) {
         renderThread.handler.doFrame(frameTimeNanos)
         Choreographer.getInstance().postFrameCallback(this)
-    }
-
-    override fun onLoadComplete(soundPool: SoundPool?, sampleId: Int, status: Int) {
-        Log.i(TAG, "onLoadComplete")
-        assert(status == 0)
-        assert(sampleId == soundId)
-        soundReady = true
     }
 
     companion object {

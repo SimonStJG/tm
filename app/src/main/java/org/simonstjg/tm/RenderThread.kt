@@ -10,14 +10,13 @@ import android.view.SurfaceHolder
 class RenderThread(
     private val surfaceHolder: SurfaceHolder,
     private val backgroundString: String,
-    private val pulseFactory: Pulse.Factory
 ) : Thread() {
     lateinit var handler: RenderHandler
 
     private val startLock = Object()
     private var ready: Boolean = false
 
-    private var pulses: MutableList<Pulse> = mutableListOf()
+    private var pulses: MutableList<PulseRenderer> = mutableListOf()
     private var lastFrameTimeNanos: Long? = null
     private var paint = Paint().apply {
         color = Color.BLUE
@@ -34,8 +33,8 @@ class RenderThread(
         Looper.prepare()
         handler = RenderHandler(Looper.myLooper()!!, this)
         synchronized(startLock) {
-            ready = true;
-            startLock.notify();    // signal waitUntilReady()
+            ready = true
+            startLock.notify()    // signal waitUntilReady()
         }
         Looper.loop()
     }
@@ -107,9 +106,9 @@ class RenderThread(
         }
     }
 
-    fun addPulse(x: Int, y: Int) {
-        Log.i(TAG, "addPulse $x $y")
-        pulses.add(pulseFactory.randomPulse(Pulse.StartingPosition(x.toFloat(), y.toFloat())))
+    fun addPulse(pulse: PulseRenderer) {
+        Log.i(TAG, "addPulse $pulse")
+        pulses.add(pulse)
     }
 
     companion object {

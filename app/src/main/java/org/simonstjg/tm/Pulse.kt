@@ -1,100 +1,64 @@
 package org.simonstjg.tm
 
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Paint
 import android.graphics.drawable.Drawable
+import android.media.SoundPool
+import android.util.Log
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.drawable.toBitmap
-import kotlin.math.min
-import kotlin.random.Random
 
-sealed class Pulse(protected val startingPosition: StartingPosition) {
-    protected var size: Float = 0f
-    private var shrinkSpeed: Double = 0.0
+class Pulse(private val drawable: Drawable, private val soundId: Int) {
+    private var ready = false
 
-    fun tick(canvas: Canvas, paint: Paint, frameDuration: Long): Boolean {
-        if (shrinkSpeed == 0.0) {
-            // First tick, we need to initialize the size and shrinkSpeed
-            val initialSize = min(canvas.height, canvas.width) * PULSE_RATIO
+    fun renderer(startingPosition: PulseRenderer.StartingPosition) =
+        PulseRenderer(startingPosition, drawable)
 
-            //  I want the time to shrink from initialPulseSize to 0 to be TIME_TO_SHRINK_SECS, and
-            //  we're going to shrink linearly.  The unit of this is pixels per nanosecond.
-            shrinkSpeed = initialSize / (1_000_000_000.0 * TIME_TO_SHRINK_SECS)
-            size = initialSize
+    fun playSound(soundPool: SoundPool, rate: Float) {
+        if (!ready) {
+            Log.e(TAG, "Sound $soundId not ready")
         }
-
-        draw(canvas, paint)
-
-        size -= (shrinkSpeed * frameDuration).toFloat()
-        return size >= MIN_WIDTH
+        if (soundPool.play(soundId, 1f, 1f, 1, 0, rate) != 0) {
+            Log.e(TAG, "Failed to play sound $soundId")
+        }
     }
 
-    protected abstract fun draw(canvas: Canvas, paint: Paint)
+    fun onLoadComplete(sampleId: Int) {
+        if (sampleId == soundId) {
+            ready = true
+        }
+    }
 
     companion object {
-        private const val TIME_TO_SHRINK_SECS = 3
-        /**
-         * The size of the pulse as a ratio of the min(width, height) of the canvas.
-         */
-        private const val PULSE_RATIO: Float = 0.15f
-
-        /**
-         * The minimum width of a pulse before it's removed
-         */
-        private const val MIN_WIDTH = 5
-    }
-
-    data class StartingPosition(val x: Float, val y: Float)
-
-    class Factory(context: Context) {
-        private val randomShuffle = RandomShuffle(0, 1, 2)
-        private val solidPulseFactory = SolidPulse.Factory()
-        private val holtFactory = BitmapPulse.Factory(context, R.raw.holt)
-
-        fun randomPulse(startingPosition: StartingPosition): Pulse {
-            val factory = when (randomShuffle.next()) {
-                0 -> solidPulseFactory
-                1-> holtFactory
-                else -> {
-                    throw IllegalArgumentException()
-                }
-            }
-            return factory.build(startingPosition)
-        }
-    }
-
-    interface PulseFactory {
-        fun build(startingPosition: StartingPosition): Pulse
+        private val TAG = Pulse::class.java.name
     }
 }
 
-class SolidPulse(startingPosition: StartingPosition) : Pulse(startingPosition) {
-    override fun draw(canvas: Canvas, paint: Paint) {
-        canvas.drawCircle(startingPosition.x, startingPosition.y, size / 2, paint)
+class Pulses(context: Context, soundPool: SoundPool) : SoundPool.OnLoadCompleteListener {
+    init {
+        soundPool.setOnLoadCompleteListener(this)
     }
 
-    class Factory : PulseFactory {
-        override fun build(startingPosition: StartingPosition) = SolidPulse(startingPosition)
-    }
-}
-
-class BitmapPulse(startingPosition: StartingPosition, private val drawable: Drawable) : Pulse(startingPosition) {
-    override fun draw(canvas: Canvas, paint: Paint) {
-        val x = startingPosition.x - size /2
-        val y = startingPosition.y - size /2
-
-        canvas.drawBitmap(
-            drawable.toBitmap(size.toInt(), size.toInt()),
-            x,
-            y,
-            paint
+    private val pulses = listOf(
+        Pulse(
+            ContextCompat.getDrawable(context, R.drawable.holt)!!,
+            soundPool.load(context, R.raw.holt_boost, 1)
+        ),
+        Pulse(
+            ContextCompat.getDrawable(context, R.drawable.boyle)!!,
+            soundPool.load(context, R.raw.boyle_gobble, 1)
         )
+    )
+
+    private val randomShuffle = RandomShuffle(0, pulses.size - 1, 2)
+
+    fun random(): Pulse = pulses[randomShuffle.next()]
+
+    override fun onLoadComplete(soundPool: SoundPool?, sampleId: Int, status: Int) {
+        Log.i(TAG, "onLoadComplete $sampleId")
+        assert(status == 0)
+        pulses.forEach { it.onLoadComplete(sampleId) }
     }
 
-    class Factory(context: Context, drawableId: Int): PulseFactory {
-        private val drawable = ContextCompat.getDrawable(context, drawableId)!!
-
-        override fun build(startingPosition: StartingPosition): Pulse = BitmapPulse(startingPosition, drawable)
+    companion object {
+        private val TAG = Pulses::class.java.name
     }
 }
