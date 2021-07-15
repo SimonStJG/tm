@@ -5,27 +5,28 @@ import android.graphics.Paint
 import android.os.Looper
 import android.util.Log
 import android.view.SurfaceHolder
-import kotlin.math.min
 
 
 class RenderThread(
     private val surfaceHolder: SurfaceHolder,
-    private val backgroundString: String
+    private val backgroundString: String,
+    private val pulseFactory: Pulse.Factory
 ) : Thread() {
     lateinit var handler: RenderHandler
 
     private val startLock = Object()
     private var ready: Boolean = false
 
-    private var initialPulseSize: Double = 0.0
     private var pulses: MutableList<Pulse> = mutableListOf()
     private var lastFrameTimeNanos: Long? = null
     private var paint = Paint().apply {
         color = Color.BLUE
+        isAntiAlias = true
     }
     private var backgroundTextPaint = Paint().apply {
         color = Color.WHITE
         textAlign = Paint.Align.CENTER
+        isAntiAlias = true
     }
 
     override fun run() {
@@ -62,7 +63,6 @@ class RenderThread(
      */
     private fun precalculateUsefulConstants(width: Int, height: Int) {
         Log.i(TAG, "precalculateUsefulConstants")
-        initialPulseSize = (min(width, height) * PULSE_RATIO).toDouble()
 
         // Set the font size to something in the right ballpark, then scale it until it's correct.
         // We want to end up with `textWidth / canvasWidth = .8`.
@@ -109,14 +109,10 @@ class RenderThread(
 
     fun addPulse(x: Int, y: Int) {
         Log.i(TAG, "addPulse $x $y")
-        pulses.add(Pulse.randomPulse(x.toFloat(), y.toFloat(), initialPulseSize))
+        pulses.add(pulseFactory.randomPulse(Pulse.StartingPosition(x.toFloat(), y.toFloat())))
     }
 
     companion object {
-        /**
-         * The size of the pulse as a ratio of the min(width, height) of the canvas.
-         */
-        private const val PULSE_RATIO: Float = 0.1f
         private val TAG = RenderThread::class.java.name
     }
 }

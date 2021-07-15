@@ -24,6 +24,7 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
     private lateinit var mainSurface: SurfaceView
     private lateinit var soundPool: SoundPool
     private lateinit var renderThread: RenderThread
+    private lateinit var pulseFactory: Pulse.Factory
 
     private var soundId by Delegates.notNull<Int>()
     private var soundReady: Boolean = false
@@ -74,6 +75,8 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
             .build()
         soundId = soundPool.load(this.applicationContext, R.raw.s1, 1)
         soundPool.setOnLoadCompleteListener(this)
+
+        pulseFactory = Pulse.Factory(applicationContext)
     }
 
     private fun hideSystemUi() {
@@ -92,7 +95,7 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback, SoundPool.OnLoad
     override fun surfaceCreated(holder: SurfaceHolder) {
         Log.i(TAG, "surfaceCreated")
 
-        renderThread = RenderThread(mainSurface.holder, getString(R.string.background_text))
+        renderThread = RenderThread(mainSurface.holder, getString(R.string.background_text), pulseFactory)
         renderThread.start()
         // Doesn't take long, fine to block the UI thread
         renderThread.waitUntilReady()

@@ -11,9 +11,7 @@ class RenderHandler(looper: Looper, renderThread: RenderThread) : Handler(looper
     override fun handleMessage(msg: Message) {
         when (msg.what) {
             SHUTDOWN -> {
-                if (!hasMessages(SHUTDOWN)) {
-                    Looper.myLooper()!!.quit()
-                }
+                Looper.myLooper()!!.quit()
             }
             SURFACE_CHANGED -> {
                 val width = msg.arg1
@@ -22,6 +20,7 @@ class RenderHandler(looper: Looper, renderThread: RenderThread) : Handler(looper
             }
             DO_FRAME -> {
                 if (hasMessages(DO_FRAME)) {
+                    // The number of do frame messages in the queue is backing up, drop them.
                     removeMessages(DO_FRAME, null)
                 }
                 renderThread.get()!!.doFrame(msg.obj as Long)
