@@ -48,11 +48,12 @@ sealed class Pulse(protected val startingPosition: StartingPosition) {
     data class StartingPosition(val x: Float, val y: Float)
 
     class Factory(context: Context) {
+        private val randomShuffle = RandomShuffle(0, 1, 2)
         private val solidPulseFactory = SolidPulse.Factory()
         private val holtFactory = BitmapPulse.Factory(context, R.raw.holt)
 
         fun randomPulse(startingPosition: StartingPosition): Pulse {
-            val factory = when (Random.nextInt(0, 2)) {
+            val factory = when (randomShuffle.next()) {
                 0 -> solidPulseFactory
                 1-> holtFactory
                 else -> {

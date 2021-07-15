@@ -61,7 +61,7 @@ class RenderThread(
      * Calculate useful constants which will be needed often, e.g. when we draw a frame or create a
      * pulse.
      */
-    private fun precalculateUsefulConstants(width: Int, height: Int) {
+    private fun precalculateUsefulConstants(width: Int, @Suppress("UNUSED_PARAMETER") height: Int) {
         Log.i(TAG, "precalculateUsefulConstants")
 
         // Set the font size to something in the right ballpark, then scale it until it's correct.
