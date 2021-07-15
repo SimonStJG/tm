@@ -45,6 +45,10 @@ class Pulses(context: Context, soundPool: SoundPool) : SoundPool.OnLoadCompleteL
         Pulse(
             ContextCompat.getDrawable(context, R.drawable.boyle)!!,
             soundPool.load(context, R.raw.boyle_gobble, 1)
+        ),
+        Pulse(
+            ContextCompat.getDrawable(context, R.drawable.gina)!!,
+            soundPool.load(context, R.raw.gina_spaghetti, 1)
         )
     )
 
