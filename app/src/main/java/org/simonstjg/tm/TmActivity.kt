@@ -38,7 +38,7 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback,
                     )
                 )
 
-                val rate = (1.5f - (motionEvent.y / view.height))
+                val rate = 1 + (PITCH_SKEW / 2) - (motionEvent.y / view.height) * PITCH_SKEW
                 pulse.playSound(soundPool, rate)
             }
             MotionEvent.ACTION_UP -> view.performClick()
@@ -119,5 +119,6 @@ class TmActivity : AppCompatActivity(), SurfaceHolder.Callback,
     companion object {
         private val TAG: String = TmActivity::class.java.name
         private const val MAX_CONCURRENT_SOUNDS = 8
+        private const val PITCH_SKEW = 0.6f
     }
 }
